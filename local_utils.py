@@ -218,20 +218,21 @@ def load_model(path):
             model_json = json_file.read()
         model = model_from_json(model_json, custom_objects={})
         model.load_weights('%s.h5' % path)
-        print("[INFO] Loading Wpod-Net model successfully...")
+        print("[INFO] Wpod-Net model loaded successfully...")
         return model
     except Exception as e:
         print(e)
 
 wpod_net_path = "wpod-net.json"
 wpod_net = load_model(wpod_net_path)
-def get_plate(image_path, Dmax=700, Dmin = 500):
+def get_plate(image_path, Dmax=700, Dmin=500):
     vehicle = preprocess_image(image_path)
-    ratio = float(max(vehicle.shape[:2])) / min(vehicle.shape[:2])
+    ratio = float(max(vehicle.shape[:2])) / min(vehicle.shape[:2])  #vehicle.shape[:2] = (720,1280), ratio = 1.77777778
     side = int(ratio * Dmin)
     bound_dim = min(side, Dmax)
-    _ , LpImg, _, cor = detect_lp(wpod_net, vehicle, bound_dim, lp_threshold=0.5)
-    return vehicle, LpImg, cor
+    _, LpImg, LpType, cor = detect_lp(wpod_net, vehicle, bound_dim, lp_threshold=0.5)
+    #print(LpType)
+    return vehicle, LpImg, LpType, cor
 
 def predict_from_model(image, model, labels):
     image = cv2.resize(image, (80, 80))
@@ -255,5 +256,5 @@ def detect_lp(model, I, max_dim, lp_threshold):
     Yr = model.predict(T)
     Yr = np.squeeze(Yr)  #remove các chiều = 1 của Yr
     # print(Yr.shape)
-    L, TLp, lp_type, Cor = reconstruct(I, Iresized, Yr, lp_threshold)
-    return L, TLp, lp_type, Cor
+    L, TLp, lp_type, cor = reconstruct(I, Iresized, Yr, lp_threshold)
+    return L, TLp, lp_type, cor
