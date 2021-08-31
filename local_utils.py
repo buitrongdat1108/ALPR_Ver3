@@ -4,6 +4,7 @@ import numpy as np
 from keras.models import model_from_json
 from os.path import splitext
 
+
 class Label:
     def __init__(self, cl=-1, tl=np.array([0., 0.]), br=np.array([0., 0.]), prob=None):
         self.__tl = tl
@@ -203,13 +204,15 @@ def reconstruct(I, Iresized, Yr, lp_threshold):
             Cor.append(ptsh)
     return final_labels, TLp, lp_type, Cor
 
-def preprocess_image(image_path,resize=False):
+
+def preprocess_image(image_path, resize=False):
     img = cv2.imread(image_path)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = img / 255
     if resize:
         img = cv2.resize(img, (224, 224))
     return img
+
 
 def load_model(path):
     try:
@@ -223,38 +226,43 @@ def load_model(path):
     except Exception as e:
         print(e)
 
+
 wpod_net_path = "wpod-net.json"
 wpod_net = load_model(wpod_net_path)
-def get_plate(image_path, Dmax=700, Dmin=500):
-    vehicle = preprocess_image(image_path)
-    ratio = float(max(vehicle.shape[:2])) / min(vehicle.shape[:2])  #vehicle.shape[:2] = (720,1280), ratio = 1.77777778
-    side = int(ratio * Dmin)
-    bound_dim = min(side, Dmax)
-    _, LpImg, LpType, cor = detect_lp(wpod_net, vehicle, bound_dim, lp_threshold=0.5)
-    #print(LpType)
-    return vehicle, LpImg, LpType, cor
+
 
 def predict_from_model(image, model, labels):
     image = cv2.resize(image, (80, 80))
-    image = np.stack((image,)*3, axis=-1)
+    image = np.stack((image,) * 3, axis=-1)
     prediction = labels.inverse_transform([np.argmax(model.predict(image[np.newaxis, :]))])
     return prediction
 
+
 def detect_lp(model, I, max_dim, lp_threshold):
-    #Tính factor resize ảnh
+    # Tính factor resize ảnh
     min_dim_img = min(I.shape[:2])
     factor = float(max_dim) / min_dim_img
 
-    #Tính W và H mới sau khi resize
+    # Tính W và H mới sau khi resize
     w, h = (np.array(I.shape[1::-1], dtype=float) * factor).astype(int).tolist()
-    #Tiến hành resize ảnh
+    # Tiến hành resize ảnh
     Iresized = cv2.resize(I, (w, h))
     T = Iresized.copy()
-    #Chuyển thành tensor
+    # Chuyển thành tensor
     T = T.reshape((1, T.shape[0], T.shape[1], T.shape[2]))
-    #Tiến hành detect biển số bằng wpod-net pretrain
+    # Tiến hành detect biển số bằng wpod-net pretrain
     Yr = model.predict(T)
-    Yr = np.squeeze(Yr)  #remove các chiều = 1 của Yr
+    Yr = np.squeeze(Yr)  # remove các chiều = 1 của Yr
     # print(Yr.shape)
     L, TLp, lp_type, cor = reconstruct(I, Iresized, Yr, lp_threshold)
     return L, TLp, lp_type, cor
+
+
+def get_plate(image_path, Dmax=700, Dmin=500):
+    vehicle = preprocess_image(image_path)
+    ratio = float(max(vehicle.shape[:2])) / min(vehicle.shape[:2])  # vehicle.shape[:2] = (720,1280), ratio = 1.77777778
+    side = int(ratio * Dmin)
+    bound_dim = min(side, Dmax)
+    _, LpImg, LpType, cor = detect_lp(wpod_net, vehicle, bound_dim, lp_threshold=0.5)
+    # print(LpType)
+    return LpImg, LpType, cor

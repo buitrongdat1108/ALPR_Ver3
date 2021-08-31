@@ -26,14 +26,26 @@ labels = LabelEncoder()
 labels.classes_ = np.load('license_character_classes.npy')
 print("[INFO] Labels loaded successfully...")
 
-#PART 2: Detect plate image and segment character
 
-def plateDetect(testImagePath):
-    vehicle, LpImg, LpType, cor = get_plate(testImagePath)
-    #print(vehicle.size)
-    #print(cor)
+#PART 2: Detect plate image and segment character
+def plateDetect(testImagePath, i = None):
+    '''
+     #crop
+    img = cv2.imread(testImagePath)
+    imgCrop = img[540:900, 395:755, :]
+    imgCropName = 'test_%d.jpg' % i
+    cv2.imwrite(imgCropName, imgCrop)
+    '''
+    '''
+    
+    '''
+    # resize
+    img = cv2.imread(testImagePath)
+    imgResized = cv2.resize(img, (360, 360))
+    imgResizedName = "test_%d.jpg" % i
+    cv2.imwrite(imgResizedName, imgResized)
+    LpImg, LpType, cor = get_plate(imgResizedName)
     print("Detected %i  plate(s) " % len(LpImg))
-    #print(LpImg[0])
     if len(LpImg):  # check if there is at least one license image
         # Scales, calculates absolute values, and converts the result to 8-bit.
         plate_image = cv2.convertScaleAbs(LpImg[0], alpha=255.0)
@@ -47,17 +59,16 @@ def plateDetect(testImagePath):
         # cv2.imshow("Anh bien so sau chỉnh sua", binary)
         kernel3 = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
         thre_mor = cv2.morphologyEx(binary, cv2.MORPH_DILATE, kernel3)
-        # cv2.imshow("thre_mor",thre_mor)
+        #cv2.imshow("thre_mor", thre_mor)
 
     # Create sort_contours() function to grab the contour of each digit from left to right
     def sort_contours(cnts, reverse=False):
         i = 0
         boundingBoxes = [cv2.boundingRect(c) for c in cnts]
-        print(boundingBoxes)
+        # print(boundingBoxes)
         (cnts, boundingBoxes) = zip(*sorted(zip(cnts, boundingBoxes), key=lambda b: b[1][i], reverse=reverse))
         return cnts
-
-    cont, _ = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    cont, _ = cv2.findContours(thre_mor, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
     # Initialize a list which will be used to append character image
     crop_characters = []
@@ -67,10 +78,10 @@ def plateDetect(testImagePath):
 
     for c in sort_contours(cont):  # now become cont
         (x, y, w, h) = cv2.boundingRect(c)
-        # area = w*h
-        # print(area)
+        area = w*h
+        #print(area)
         ratio = h / w
-        if 1 <= ratio <= 5:  # Only select contour with defined ratio
+        if (1 <= ratio <= 3.5)&(area >=1500):  # Only select contour with defined ratio
             if h / plate_image.shape[0] >= 0.35:  # Select contour which has the height larger than 50% of the plate
                 # Draw bounding box around digit number
                 #cv2.rectangle(tested_plate, (x, y), (x + w, y + h), (0, 255, 0), 2)
@@ -95,19 +106,32 @@ def plateDetect(testImagePath):
         final_string1 = ''.join(final_string1_List)
     return final_string1
 
-#PART 3: Create socket and send detected information
-
-serverSocket = socket.socket()
-serverSocket.bind(('', 8888))
-serverSocket.listen(10)
-
-
-while True:
-    (client, addr) = serverSocket.accept()
-    receivedPlateDir = client.recv(1024)
+if __name__ == "__main__":
+    # test = './img1.jpg'
+    # test1 = './img2.jpg'
     startTime = time.time()
-    plateNum = plateDetect(receivedPlateDir.decode())
-    client.send(plateNum.encode())
-    endTime = time.time() - startTime
-    timeReq = client.recv(1024)
-    client.send(str(endTime).encode())
+    plate = plateDetect('img1.jpg', 0)
+    print(plate)
+    print("--- Detected in %s seconds ---" % str(time.time()-startTime))
+    firstTime = time.time()
+    plate1 = plateDetect('img1.jpg', 1)
+    print(plate1)
+    print("--- Detected in %s seconds ---" % str(time.time()-firstTime))
+    cv2.waitKey()
+
+# #PART 3: Create socket and send detected information
+
+# serverSocket = socket.socket()
+# serverSocket.bind(('', 8888))
+# serverSocket.listen(10)
+
+
+# while True:
+#     (client, addr) = serverSocket.accept()
+#     receivedPlateDir = client.recv(1024)
+#     startTime = time.time()
+#     plateNum = plateDetect(receivedPlateDir.decode())
+#     client.send(plateNum.encode())
+#     endTime = time.time() - startTime
+#     timeReq = client.recv(1024)
+#     client.send(str(endTime).encode())
