@@ -289,6 +289,15 @@ labels = LabelEncoder()
 labels.classes_ = np.load('license_character_classes.npy')
 print("[INFO] Labels loaded successfully...")
 
+def paddingImg(inputImg, resize=False):
+    padding = np.zeros([inputImg.shape[1], inputImg.shape[1], 3])
+    a = int((inputImg.shape[1] - inputImg.shape[0]) / 2)
+    padding[a:(inputImg.shape[0] + a), 0:inputImg.shape[1], :] = inputImg
+    inputImg = cv2.cvtColor(inputImg, cv2.COLOR_BGR2RGB)
+    inputImg = inputImg / 255
+    if resize:
+        inputImg = cv2.resize(inputImg, (720, 720))
+    return inputImg
 
 #PART 2: Detect plate image and segment character
 def plateDetect(testImagePath, i = None):
@@ -304,14 +313,23 @@ def plateDetect(testImagePath, i = None):
     '''
     # resize
     img = cv2.imread(testImagePath)
-    imgResized = cv2.resize(img, (360, 360))
+    imgResized = cv2.resize(img, (1280, 720))
     imgResizedName = "test_%d.jpg" % i
     cv2.imwrite(imgResizedName, imgResized)
     LpImg, LpType, cor = get_plate(imgResizedName)
+    pts = []
+    x_coordinates = cor[0][0]
+    y_coordinates = cor[0][1]
+    # store the top-left,top-right,bottom-left,bottom-right(tl-tr-br-bl)
+    # of the plate license respectively
+    for i in range(4):
+        pts.append([int(x_coordinates[i]), int(y_coordinates[i])])
+    pts = np.array(pts, np.int32) #lấy được tọa độ 4 góc của BSX
     print("Detected %i  plate(s) " % len(LpImg))
     if len(LpImg):  # check if there is at least one license image
         # Scales, calculates absolute values, and converts the result to 8-bit.
         plate_image = cv2.convertScaleAbs(LpImg[0], alpha=255.0)
+        print(type(plate_image))
         # convert to grayscale and blur the image
         gray = cv2.cvtColor(plate_image, cv2.COLOR_BGR2GRAY)
         blur = cv2.GaussianBlur(gray, (7, 7), 0)
@@ -322,7 +340,7 @@ def plateDetect(testImagePath, i = None):
         # cv2.imshow("Anh bien so sau chỉnh sua", binary)
         kernel3 = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
         thre_mor = cv2.morphologyEx(binary, cv2.MORPH_DILATE, kernel3)
-        #cv2.imshow("thre_mor", thre_mor)
+        cv2.imshow("thre_mor", thre_mor)
 
     # Create sort_contours() function to grab the contour of each digit from left to right
     def sort_contours(cnts, reverse=False):
@@ -338,23 +356,24 @@ def plateDetect(testImagePath, i = None):
 
     # define standard width and height of character
     digit_w, digit_h = 30, 60
-
+    tested_plate = plate_image.copy()
     for c in sort_contours(cont):  # now become cont
         (x, y, w, h) = cv2.boundingRect(c)
         area = w*h
         #print(area)
         ratio = h / w
-        if (1 <= ratio <= 3.5)&(area >=1500):  # Only select contour with defined ratio
+        if (1 <= ratio <= 3.5):  # Only select contour with defined ratio
             if h / plate_image.shape[0] >= 0.35:  # Select contour which has the height larger than 50% of the plate
-                # Draw bounding box around digit number
-                #cv2.rectangle(tested_plate, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                #Draw bounding box around digit number
+
+                cv2.rectangle(tested_plate, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
                 # Separate number and give prediction
                 curr_num = thre_mor[y:y + h, x:x + w]
                 curr_num = cv2.resize(curr_num, dsize=(digit_w, digit_h))
                 _, curr_num = cv2.threshold(curr_num, 220, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
                 crop_characters.append(curr_num)
-    # cv2.imshow("Ket qua", tested_plate)
+    cv2.imshow("Ket qua", tested_plate)
     print("Detected {} letters...".format(len(crop_characters)))
 
     # pre-processing input images and predict with model
@@ -369,17 +388,25 @@ def plateDetect(testImagePath, i = None):
         final_string1 = ''.join(final_string1_List)
     return final_string1
 
+def testImg(imgPath):
+    img = cv2.imread(imgPath)
+    height, width = img.shape[:2]
+    center = (width/2, height/2)
+    rotate_matrix = cv2.getRotationMatrix2D(center=center, angle=90, scale=1)
+    rotated_image = cv2.warpAffine(src=img, M=rotate_matrix, dsize=(width, height))
+    cv2.imwrite("img4_rotated.jpg", rotated_image)
+    return plateDetect("img4_rotated.jpg", 1)
 if __name__ == "__main__":
     # test = './img1.jpg'
     # test1 = './img2.jpg'
     startTime = time.time()
-    plate = plateDetect('img1.jpg', 0)
+    plate = plateDetect('/home/vdtcdatbt/ALPR/ALPR_Ver5/tested_image/img14.jpg', 0)
     print(plate)
     print("--- Detected in %s seconds ---" % str(time.time()-startTime))
-    firstTime = time.time()
-    plate1 = plateDetect('img1.jpg', 1)
-    print(plate1)
-    print("--- Detected in %s seconds ---" % str(time.time()-firstTime))
+    # firstTime = time.time()
+    # plate1 = plateDetect('/home/vdtcdatbt/ALPR/ALPR_Ver5/tested_image/img14.jpg', 1)
+    # print(plate1)
+    # print("--- Detected in %s seconds ---" % str(time.time()-firstTime))
     cv2.waitKey()
 
 # #PART 3: Create socket and send detected information
